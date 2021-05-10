@@ -1,0 +1,11 @@
+ube:
+  center:
+    apiUrl: http://center:7000
+    baseUrl: http://center:7000/api/app/v2
+    vcmpUrl: ws://center:7000/api/app/v2/vcmp
+    consumerToken: variocube.logistics
+    applicationSecret: variocube.logistics
+
+og:
+  notifications:
+    sqs-queue-name: ""
