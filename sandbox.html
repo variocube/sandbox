@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+    <title>Variocube Sandbox</title>
+    <style>
+        html, body, #sandbox {
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        #sandbox {
+            background-color: #111;
+            display: flex;
+            flex-flow: row nowrap;
+            align-items: center;
+            justify-content: space-evenly;
+        }
+        iframe {
+            border: 0;
+            flex: 0 1 45%;
+        }
+        #app-host {
+            height: 30vw;
+        }
+        #mock-locking {
+            height: 40vw;
+        }
+    </style>
+</head>
+<body>
+    <div id="sandbox">
+        <iframe id="app-host" src="http://localhost:4000/?controller=localhost"></iframe>
+        <iframe id="mock-locking" src="http://localhost:9000/#/mock"></iframe>
+    </div>
+</body>
+</html>
