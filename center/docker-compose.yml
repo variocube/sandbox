@@ -1,0 +1,36 @@
+version: "2.4"
+
+services:
+
+  center:
+    image: public.ecr.aws/variocube/center:latest
+    container_name: center
+    restart: always
+    ports:
+      - "7000:7000"
+
+  center-admin:
+    image: public.ecr.aws/variocube/center-admin:latest
+    container_name: center-admin
+    restart: always
+    ports:
+      - "7001:7001"
+
+  controller:
+    image: public.ecr.aws/variocube/controller:latest
+    container_name: controller
+    restart: always
+    environment:
+      SPRING_CONFIG_ADDITIONAL_LOCATION: /application.yml
+    volumes:
+      - ./controller.yml:/application.yml:ro
+    ports:
+      - "9000:9000"
+
+  app-host:
+    image: public.ecr.aws/variocube/app-host:latest
+    container_name: app-host
+    restart: always
+    ports:
+      - "4000:4000"
+

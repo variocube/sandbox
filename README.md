@@ -22,6 +22,12 @@ git clone https://github.com/variocube/sandbox.git sandbox
 cd sandbox/logistics
 ```
 
+ - Center:
+
+```shell
+cd sandbox/center
+```
+
 4. Run the stack:
 
 ```shell
