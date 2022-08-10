@@ -3,6 +3,13 @@
 Local development environment for integration with Variocube services. It allows you to run a full Variocube 
 stack on your machine, including an emulation of a locker facility.
 
+Currently, the repo hosts the following sandbox environments:
+ - [logistics](logistics): Full stack of the logistics application; suitable for developing integrations against the logistics API. |
+ - [center](center): Cube functionality and center; suitable for developing an application against center.                    |
+ - [center+controller](center+controller): Controller and center; suitable for developing an application against center and on the cube.            |
+ - [controller+apphost](controller+apphost): Controller and app-host connecting to dev center.
+
+
 ## Getting started
 
 1. Make sure you have [docker](https://docker.com) and [docker-compose](https://docs.docker.com/compose/) installed

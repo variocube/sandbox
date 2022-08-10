@@ -1,0 +1,17 @@
+version: "2.4"
+
+services:
+
+  controller:
+    image: public.ecr.aws/variocube/controller:latest
+    container_name: controller
+    environment:
+      SPRING_PROFILES_ACTIVE: devcenter
+    ports:
+      - "9000:9000"
+
+  app-host:
+    image: public.ecr.aws/variocube/app-host:latest
+    container_name: app-host
+    ports:
+      - "4000:4000"
