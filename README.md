@@ -35,10 +35,23 @@ cd sandbox/logistics
 cd sandbox/center
 ```
 
+ - Center + Controller:
+
+```shell
+cd sandbox/center+controller
+```
+
+ - Controller + App-Host:
+
+```shell
+cd sandbox/controller+apphost
+```
+
 4. Run the stack:
 
 ```shell
-docker-compose up
+docker-compose up   # For standalone docker-compose
+docker compose up   # For compose as docker plugin
 ```
 
 At the first start, the docker images will be downloaded. This might take some time. Subsequent starts will be faster.
@@ -55,6 +68,7 @@ If you want to update to the latest version of Variocube services, change to the
 and run:
 
 ```shell
-docker-compose pull
+docker-compose pull   # For standalone docker-compose  
+docker compose pull   # For compose as docker plugin
 ```
 
