@@ -1,3 +1,11 @@
+server:
+  port: 5000
+
+variocube:
+  inhouse:
+    # The URL under which browsers and the locker UI reach logistics.
+    base-url: http://localhost:5000
+
 cube:
   center:
     apiUrl: http://center:7000
@@ -5,6 +13,12 @@ cube:
     vcmpUrl: ws://center:7000/api/app/v2/vcmp
     consumerToken: variocube.inhouse
     applicationSecret: variocube.inhouse
+
+logistics:
+  sftp:
+    # The recipient import's demo SFTP server is a Testcontainer, which needs a Docker socket.
+    testcontainer:
+      enabled: false
 
 og:
   notifications:

@@ -1,0 +1,99 @@
+name: Smoke test
+
+# Starts each local sandbox with the current :latest images and checks that it comes up, that the controller connects
+# to the local center, and that it reconnects with the same key when its container is recreated (as on an update).
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  local:
+    name: ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [center, center+controller, logistics]
+    defaults:
+      run:
+        working-directory: ${{ matrix.variant }}
+    env:
+      CENTER_APP_AUTH: variocube.inhouse:variocube.inhouse
+      CENTER_CUBE: http://localhost:7000/api/app/v2/cubes/sandbox
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Pull images
+        run: docker compose pull --quiet
+
+      - name: Start the stack
+        run: docker compose up -d
+
+      - name: Wait for center
+        run: timeout 300 bash -c 'until curl -sf http://localhost:7000/actuator/health; do sleep 5; done'
+
+      - name: Wait for logistics
+        if: matrix.variant == 'logistics'
+        run: |
+          timeout 300 bash -c 'until curl -sf -u api-dev:api-dev http://localhost:5000/api/v2/tenants/variocube; do
+            sleep 5
+          done'
+
+      - name: Wait until the controller is connected
+        run: |
+          timeout 300 bash -c "until curl -sf $CENTER_CUBE -u $CENTER_APP_AUTH | jq -e .connected; do sleep 5; done"
+          kid=$(curl -sf http://localhost:9000/identity | jq -r .kid)
+          test "$(curl -sf "$CENTER_CUBE/key" -u "$CENTER_APP_AUTH" | jq -r .key.kid)" = "$kid"
+          echo "KID=$kid" >> "$GITHUB_ENV"
+
+      # Recreating, unlike `docker compose restart`, discards the container's filesystem and hostname: only the volume
+      # and the fixed cube ID keep the cube's identity.
+      - name: Recreate the controller
+        run: |
+          echo "RESTARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          docker compose up -d --force-recreate controller
+
+      - name: Wait until the controller reconnected with the same key
+        run: |
+          timeout 300 bash -c "until docker compose logs --since $RESTARTED controller \
+            | grep -q handleSessionConnected; do sleep 5; done"
+          test "$(curl -sf http://localhost:9000/identity | jq -r .kid)" = "$KID"
+          timeout 60 bash -c "until curl -sf $CENTER_CUBE -u $CENTER_APP_AUTH | jq -e .connected; do sleep 5; done"
+
+      - name: Show logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
+
+  controller-apphost:
+    name: controller+apphost
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: controller+apphost
+    steps:
+      - uses: actions/checkout@v5
+
+      # Only the configuration is checked: started, the controller would connect to Variocube's dev center.
+      - name: Configuration requires CUBE_ID
+        run: |
+          if docker compose config -q; then
+            echo "::error::docker compose config passed without CUBE_ID"
+            exit 1
+          fi
+
+      - name: Configuration passes with CUBE_ID
+        run: |
+          cp .env.example .env
+          sed -i 's/^CUBE_ID=$/CUBE_ID=ci-sandbox-01/' .env
+          docker compose config -q

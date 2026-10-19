@@ -1,41 +1,94 @@
-version: "2.4"
-
 services:
+
+  mariadb:
+    image: mariadb:11.8
+    container_name: mariadb
+    command:
+      - --old-mode=UTF8_IS_UTF8MB3
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-ft-min-token-size=2
+      - --max-allowed-packet=67108864
+    environment:
+      MARIADB_RANDOM_ROOT_PASSWORD: "true"
+      MARIADB_DATABASE: center
+      MARIADB_USER: center
+      MARIADB_PASSWORD: center
+    volumes:
+      - mariadb:/var/lib/mysql
+      - ./mariadb-init.sql:/docker-entrypoint-initdb.d/logistics.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
 
   logistics:
     image: public.ecr.aws/variocube/logistics:latest
+    platform: linux/amd64
     container_name: logistics
     environment:
       SPRING_CONFIG_ADDITIONAL_LOCATION: /application.yml
+      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/logistics
+      SPRING_DATASOURCE_USERNAME: logistics
+      SPRING_DATASOURCE_PASSWORD: logistics
+      SPRING_JPA_HIBERNATE_DDLAUTO: validate
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_BASELINEONMIGRATE: "true"
     volumes:
       - ./logistics.yml:/application.yml:ro
+    depends_on:
+      mariadb:
+        condition: service_healthy
     ports:
       - "5000:5000"
 
   center:
     image: public.ecr.aws/variocube/center:latest
+    platform: linux/amd64
     container_name: center
+    hostname: center
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/center
+      SPRING_DATASOURCE_USERNAME: center
+      SPRING_DATASOURCE_PASSWORD: center
+      SPRING_JPA_HIBERNATE_DDLAUTO: validate
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_BASELINEONMIGRATE: "true"
+    depends_on:
+      mariadb:
+        condition: service_healthy
     ports:
       - "7000:7000"
 
   center-admin:
     image: public.ecr.aws/variocube/center-admin:latest
+    platform: linux/amd64
     container_name: center-admin
     ports:
       - "7001:7001"
 
   controller:
     image: public.ecr.aws/variocube/controller:latest
+    platform: linux/amd64
     container_name: controller
     environment:
       SPRING_CONFIG_ADDITIONAL_LOCATION: /application.yml
+      CONTROLLER_CUBE_ID: sandbox
+      CONTROLLER_DB: filesystem:/home/cnb/kvs
     volumes:
       - ./controller.yml:/application.yml:ro
+      - controller:/home/cnb
     ports:
       - "9000:9000"
 
   app-host:
     image: public.ecr.aws/variocube/app-host:latest
+    platform: linux/amd64
     container_name: app-host
     ports:
       - "4000:4000"
+
+volumes:
+  mariadb:
+  controller:
