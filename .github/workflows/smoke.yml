@@ -1,7 +1,7 @@
 name: Smoke test
 
 # Starts each local sandbox with the current :latest images and checks that it comes up, that the controller connects
-# to the local center, and that it reconnects with the same key when its container is recreated (as on an update).
+# to the local center, and that the cube key and the databases survive recreating the stack (as on an update).
 
 on:
   pull_request:
@@ -16,9 +16,11 @@ jobs:
   local:
     name: ${{ matrix.variant }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
+      # The images are pulled anonymously from public.ecr.aws, which rate-limits shared runner IPs.
+      max-parallel: 1
       matrix:
         variant: [center, center+controller, logistics]
     defaults:
@@ -30,11 +32,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # One image at a time, each retried with backoff (6 attempts); the later steps start with --pull never.
       - name: Pull images
-        run: docker compose pull --quiet
+        run: |
+          for service in $(docker compose config --services); do
+            for delay in 15 30 60 120 120 fail; do
+              docker compose pull --quiet "$service" && break
+              test "$delay" != fail || exit 1
+              echo "Pulling $service failed, retrying in ${delay}s"
+              sleep "$delay"
+            done
+          done
 
       - name: Start the stack
-        run: docker compose up -d
+        run: docker compose up -d --pull never
 
       - name: Wait for center
         run: timeout 300 bash -c 'until curl -sf http://localhost:7000/actuator/health; do sleep 5; done'
@@ -49,23 +60,32 @@ jobs:
       - name: Wait until the controller is connected
         run: |
           timeout 300 bash -c "until curl -sf $CENTER_CUBE -u $CENTER_APP_AUTH | jq -e .connected; do sleep 5; done"
-          kid=$(curl -sf http://localhost:9000/identity | jq -r .kid)
-          test "$(curl -sf "$CENTER_CUBE/key" -u "$CENTER_APP_AUTH" | jq -r .key.kid)" = "$kid"
+          kid=$(curl -sf http://localhost:9000/identity | jq -er .kid)
+          test "$(curl -sf "$CENTER_CUBE/key" -u "$CENTER_APP_AUTH" | jq -er .key.kid)" = "$kid"
           echo "KID=$kid" >> "$GITHUB_ENV"
 
-      # Recreating, unlike `docker compose restart`, discards the container's filesystem and hostname: only the volume
-      # and the fixed cube ID keep the cube's identity.
-      - name: Recreate the controller
+      # As on an update: new containers keep only what is on the volumes and in the compose file (the cube ID).
+      - name: Recreate the stack
         run: |
-          echo "RESTARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
-          docker compose up -d --force-recreate controller
+          docker compose down
+          docker compose up -d --pull never
 
       - name: Wait until the controller reconnected with the same key
         run: |
-          timeout 300 bash -c "until docker compose logs --since $RESTARTED controller \
-            | grep -q handleSessionConnected; do sleep 5; done"
-          test "$(curl -sf http://localhost:9000/identity | jq -r .kid)" = "$KID"
+          timeout 300 bash -c "until docker compose logs controller | grep -q handleSessionConnected; do sleep 5; done"
+          test "$(curl -sf http://localhost:9000/identity | jq -er .kid)" = "$KID"
           timeout 60 bash -c "until curl -sf $CENTER_CUBE -u $CENTER_APP_AUTH | jq -e .connected; do sleep 5; done"
+
+      - name: Check that center kept its database
+        run: docker compose logs center | grep "No migration necessary"
+
+      - name: Check that logistics kept its database
+        if: matrix.variant == 'logistics'
+        run: |
+          timeout 300 bash -c 'until curl -sf -u api-dev:api-dev http://localhost:5000/api/v2/tenants/variocube; do
+            sleep 5
+          done'
+          docker compose logs logistics | grep "Demo data already exists"
 
       - name: Show logs
         if: failure()

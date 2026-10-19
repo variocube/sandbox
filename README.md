@@ -58,11 +58,16 @@ cd sandbox/center+controller
 cd sandbox/controller+apphost
 ```
 
-4. Controller + App-Host only: name your cube. Copy the example file:
+4. Controller + App-Host only: name your cube. Copy the example file, on Linux and macOS with:
 
 ```shell
-cp .env.example .env     # Linux, macOS
-copy .env.example .env   # Windows
+cp .env.example .env
+```
+
+On Windows:
+
+```shell
+copy .env.example .env
 ```
 
 Then open `.env` in a text editor and set `CUBE_ID` to `<company short name>-sandbox-<nn>`, e.g.

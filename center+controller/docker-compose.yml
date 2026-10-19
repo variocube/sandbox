@@ -2,7 +2,6 @@ services:
 
   mariadb:
     image: mariadb:11.8
-    container_name: mariadb
     command:
       - --old-mode=UTF8_IS_UTF8MB3
       - --character-set-server=utf8mb4
