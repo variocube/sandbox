@@ -1,17 +1,24 @@
-version: "2.4"
-
 services:
 
   controller:
     image: public.ecr.aws/variocube/controller:latest
+    platform: linux/amd64
     container_name: controller
     environment:
       SPRING_PROFILES_ACTIVE: devcenter
+      CONTROLLER_CUBE_ID: ${CUBE_ID:?Copy .env.example to .env and set your cube name, e.g. CUBE_ID=acme-sandbox-01}
+      CONTROLLER_DB: filesystem:/home/cnb/kvs
+    volumes:
+      - controller:/home/cnb
     ports:
       - "9000:9000"
 
   app-host:
     image: public.ecr.aws/variocube/app-host:latest
+    platform: linux/amd64
     container_name: app-host
     ports:
       - "4000:4000"
+
+volumes:
+  controller:

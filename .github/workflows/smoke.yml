@@ -1,0 +1,119 @@
+name: Smoke test
+
+# Starts each local sandbox with the current :latest images and checks that it comes up, that the controller connects
+# to the local center, and that the cube key and the databases survive recreating the stack (as on an update).
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  local:
+    name: ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      # The images are pulled anonymously from public.ecr.aws, which rate-limits shared runner IPs.
+      max-parallel: 1
+      matrix:
+        variant: [center, center+controller, logistics]
+    defaults:
+      run:
+        working-directory: ${{ matrix.variant }}
+    env:
+      CENTER_APP_AUTH: variocube.inhouse:variocube.inhouse
+      CENTER_CUBE: http://localhost:7000/api/app/v2/cubes/sandbox
+    steps:
+      - uses: actions/checkout@v5
+
+      # One image at a time, each retried with backoff (6 attempts); the later steps start with --pull never.
+      - name: Pull images
+        run: |
+          for service in $(docker compose config --services); do
+            for delay in 15 30 60 120 120 fail; do
+              docker compose pull --quiet "$service" && break
+              test "$delay" != fail || exit 1
+              echo "Pulling $service failed, retrying in ${delay}s"
+              sleep "$delay"
+            done
+          done
+
+      - name: Start the stack
+        run: docker compose up -d --pull never
+
+      - name: Wait for center
+        run: timeout 300 bash -c 'until curl -sf http://localhost:7000/actuator/health; do sleep 5; done'
+
+      - name: Wait for logistics
+        if: matrix.variant == 'logistics'
+        run: |
+          timeout 300 bash -c 'until curl -sf -u api-dev:api-dev http://localhost:5000/api/v2/tenants/variocube; do
+            sleep 5
+          done'
+
+      - name: Wait until the controller is connected
+        run: |
+          timeout 300 bash -c "until curl -sf $CENTER_CUBE -u $CENTER_APP_AUTH | jq -e .connected; do sleep 5; done"
+          kid=$(curl -sf http://localhost:9000/identity | jq -er .kid)
+          test "$(curl -sf "$CENTER_CUBE/key" -u "$CENTER_APP_AUTH" | jq -er .key.kid)" = "$kid"
+          echo "KID=$kid" >> "$GITHUB_ENV"
+
+      # As on an update: new containers keep only what is on the volumes and in the compose file (the cube ID).
+      - name: Recreate the stack
+        run: |
+          docker compose down
+          docker compose up -d --pull never
+
+      - name: Wait until the controller reconnected with the same key
+        run: |
+          timeout 300 bash -c "until docker compose logs controller | grep -q handleSessionConnected; do sleep 5; done"
+          test "$(curl -sf http://localhost:9000/identity | jq -er .kid)" = "$KID"
+          timeout 60 bash -c "until curl -sf $CENTER_CUBE -u $CENTER_APP_AUTH | jq -e .connected; do sleep 5; done"
+
+      - name: Check that center kept its database
+        run: docker compose logs center | grep "No migration necessary"
+
+      - name: Check that logistics kept its database
+        if: matrix.variant == 'logistics'
+        run: |
+          timeout 300 bash -c 'until curl -sf -u api-dev:api-dev http://localhost:5000/api/v2/tenants/variocube; do
+            sleep 5
+          done'
+          docker compose logs logistics | grep "Demo data already exists"
+
+      - name: Show logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
+
+  controller-apphost:
+    name: controller+apphost
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: controller+apphost
+    steps:
+      - uses: actions/checkout@v5
+
+      # Only the configuration is checked: started, the controller would connect to Variocube's dev center.
+      - name: Configuration requires CUBE_ID
+        run: |
+          if docker compose config -q; then
+            echo "::error::docker compose config passed without CUBE_ID"
+            exit 1
+          fi
+
+      - name: Configuration passes with CUBE_ID
+        run: |
+          cp .env.example .env
+          sed -i 's/^CUBE_ID=$/CUBE_ID=ci-sandbox-01/' .env
+          docker compose config -q
