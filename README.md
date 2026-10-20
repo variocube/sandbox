@@ -18,6 +18,11 @@ Currently, the repo hosts the following sandbox environments:
 In the local sandboxes, the emulated cube is called `sandbox`. The local center assigns it to the tenant `variocube`
 and gives it 16 boxes.
 
+## Terms of use
+
+The Variocube Sandbox is intended exclusively for companies that intend to purchase or have already purchased
+Variocube products. Any other use is not permitted. See [LICENSE](LICENSE).
+
 ## Getting started
 
 1. Make sure you have [docker](https://docker.com) with [Docker Compose](https://docs.docker.com/compose/) v2 installed
